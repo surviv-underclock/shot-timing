@@ -105,12 +105,12 @@ class TimingFormatter(Formatter):
         not_first = False
         for v in chain:
             if v[3] and not_first:
-                if v[1] != solver.free_switch_delay:
-                    entries.append(str(v[1] - solver.free_switch_delay))
-                entries.append('fs {}'.format(solver.free_switch_delay))
+                if v[1] != self.solver.free_switch_delay:
+                    entries.append(str(v[1] - self.solver.free_switch_delay))
+                entries.append('fs {}'.format(self.solver.free_switch_delay))
             elif v[1] or not_first:
                 entries.append(str(v[1]))
-            entries.append(solver.weapons[v[0]].name)
+            entries.append(self.solver.weapons[v[0]].name)
             not_first = True
         return ' '.join(entries)
 
@@ -123,9 +123,9 @@ class InstructionFormatter(Formatter):
         for shot in chain:
             t += shot[1]
             if shot[3]:
-                if shot[1] != solver.free_switch_delay and not_first:
+                if shot[1] != self.solver.free_switch_delay and not_first:
                     tokens.append('c')
-                    tokens.append(str(t - solver.free_switch_delay) + ':')
+                    tokens.append(str(t - self.solver.free_switch_delay) + ':')
                 tokens.append(chr(ord('A') + shot[0]))
                 tokens.append(str(t) + ':')
                 tokens.append('!')
@@ -140,17 +140,21 @@ class InstructionFormatter(Formatter):
             not_first = True
         return ' '.join(tokens)
 
-solver = Solver.new(weapons=(
-    Weapon('M870', 900, 1, 5),
-    Weapon('MP220', 300, -2, 2),
-))
+def main():
+    solver = Solver.new(weapons=(
+        Weapon('M870', 900, 1, 5),
+        Weapon('MP220', 300, -2, 2),
+    ))
 
-formatters = (TimingFormatter(solver), InstructionFormatter(solver))
+    formatters = (TimingFormatter(solver), InstructionFormatter(solver))
 
-best, best_count, best_chains = solver.minimize_time_first_to_last()
-print(best_count)
-print(best)
-for chain in best_chains:
-    print()
-    for formatter in formatters:
-        print(formatter.format(chain))
+    best, best_count, best_chains = solver.minimize_time_first_to_last()
+    print(best_count)
+    print(best)
+    for chain in best_chains:
+        print()
+        for formatter in formatters:
+            print(formatter.format(chain))
+
+if __name__ == '__main__':
+    main()
