@@ -18,7 +18,7 @@ def solve(fs_timer, deploy_group, s, memo = {}):
     if not any(s):
         return 0, 1, ((),)
 
-    key = (fs_timer,) + s
+    key = (fs_timer, deploy_group) + s
     if key not in memo:
         best = best_count = best_chains = None
         for i in range(len(s)):
@@ -27,15 +27,19 @@ def solve(fs_timer, deploy_group, s, memo = {}):
 
             ns = remove_one_shot(s, i)
 
-            delay_fs = fs_timer
-            if delay_fs == 0 and DEPLOY_GROUP[i] == deploy_group:
-                delay_fs = FREE_SWITCH_TIMER
-            delay_fs += FREE_SWITCH_DELAY
+            # wait for next free switch
+            delay_fs = fs_timer + FREE_SWITCH_DELAY
+            delay_next_fs = FREE_SWITCH_TIMER - FREE_SWITCH_DELAY
+            if fs_timer == 0 and DEPLOY_GROUP[i] == deploy_group:
+                delay_fs += FREE_SWITCH_TIMER
 
+            # use full switch delay
             switch_delay = SWITCH_DELAY[i]
+            switch_next_fs = max(0, (fs_timer or FREE_SWITCH_TIMER) - switch_delay)
+
             for delay, next_fs, was_fs in (
-                (delay_fs, FREE_SWITCH_TIMER - FREE_SWITCH_DELAY, True), # next free switch
-                (switch_delay, fs_timer - switch_delay if fs_timer >= switch_delay else FREE_SWITCH_TIMER, False), # switch delay
+                (delay_fs, delay_next_fs, True), # next free switch
+                (switch_delay, switch_next_fs, False), # switch delay
             ):
                 r, count, chains = solve(next_fs, DEPLOY_GROUP[i], ns)
                 r += delay
@@ -48,15 +52,13 @@ def solve(fs_timer, deploy_group, s, memo = {}):
 
     return memo[key]
 
-def solve2(s, initial_fs, initial_was_fs):
-    initial_delay = FREE_SWITCH_TIMER - initial_fs
-
+def solve2(s, initial_fs, initial_delay, initial_was_fs):
     best = best_count = best_chains = None
     for i in range(len(s)):
         if not s[i]:
             continue
 
-        r, count, chains = solve(initial_fs, 0, remove_one_shot(s, i))
+        r, count, chains = solve(initial_fs, DEPLOY_GROUP[i], remove_one_shot(s, i))
         if best is None or best > r:
             best, best_count, best_chains = r, count, tuple(((i, initial_delay, initial_fs, initial_was_fs),) + x for x in chains)
         elif best == r:
@@ -70,9 +72,9 @@ def solve2(s, initial_fs, initial_was_fs):
 
 def minimize_time_first_to_last(s):
     if REQUIRE_SHOT_AT_ZERO:
-        return solve2(s, FREE_SWITCH_TIMER, False)
+        return solve2(s, 0, 0, False)
     else:
-        return solve2(s, 1, True)
+        return solve2(s, 1, FREE_SWITCH_TIMER - 1, True)
 
 def minimize_max_time_between_shots():
     raise NotImplementedError('this problem is hard')
@@ -85,7 +87,7 @@ def format_timings(chain):
             if v[1] != FREE_SWITCH_DELAY:
                 entries.append(str(v[1] - FREE_SWITCH_DELAY))
             entries.append('fs {}'.format(FREE_SWITCH_DELAY))
-        else:
+        elif v[1] or not_first:
             entries.append(str(v[1]))
         entries.append(WEAP_NAMES[v[0]])
         not_first = True
@@ -94,11 +96,12 @@ def format_timings(chain):
 def format_instructions(chain):
     t = 0
     last_weap = None
+    not_first = False
     tokens = []
     for shot in chain:
         t += shot[1]
         if shot[3]:
-            if shot[1] != FREE_SWITCH_DELAY and t != 999:
+            if shot[1] != FREE_SWITCH_DELAY and not_first:
                 tokens.append('c')
                 tokens.append(str(t - FREE_SWITCH_DELAY) + ':')
             tokens.append(chr(ord('A') + shot[0]))
@@ -108,9 +111,11 @@ def format_instructions(chain):
             if last_weap == shot[0]:
                 tokens.append('d')
             tokens.append(chr(ord('a') + shot[0]))
-            tokens.append(str(t) + ':')
+            if t:
+                tokens.append(str(t) + ':')
             tokens.append('!')
         last_weap = shot[0]
+        not_first = True
     return ' '.join(tokens)
 
 best, best_count, best_chains = minimize_time_first_to_last(MAG_SIZE)
