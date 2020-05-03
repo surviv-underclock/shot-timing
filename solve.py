@@ -42,13 +42,14 @@ class SolverSolution(NamedTuple):
         return SolverSolution(self.objective, self.count + other.count, self.chains + other.chains)
 
 class Solver(NamedTuple):
-    weapons: Tuple[Weapon, ...]
-    require_shot_at_zero = False
-    free_switch_timer = 1000
-    free_switch_delay = 250
-    max_slow = 0
-
     memo: dict
+    weapons: Tuple[Weapon, ...]
+
+    require_shot_at_zero: bool = False
+    free_switch_timer: int = 1000
+    free_switch_delay: int = 250
+    max_slow: int = 0 # not supported
+    initial_time_offset: int = 0
 
     @classmethod
     def new(cls, *args, **kwargs):
@@ -57,9 +58,9 @@ class Solver(NamedTuple):
     def minimize_time_first_to_last(self) -> SolverSolution:
         s = self._get_shots_initial()
         if self.require_shot_at_zero:
-            return self._solve_initial(s, 0, 0, False)
+            return self._solve_initial(s, 0, self.initial_time_offset, ShotAction.INITIAL_IMMEDIATE)
         else:
-            return self._solve_initial(s, 1, self.free_switch_timer - 1, True)
+            return self._solve_initial(s, 1, self.free_switch_timer - 1 + self.initial_time_offset, ShotAction.INITIAL_FS)
 
     def minimize_max_time_between_shots(self) -> SolverSolution:
         raise NotImplementedError('this problem is hard')
@@ -88,7 +89,9 @@ class Solver(NamedTuple):
                         for delay, next_fs, action in (
                             # wait for next free switch
                             (
-                                (state.free_switch_state if state.free_switch_state or weap.deploy_group != state.deploy_group else self.free_switch_timer)
+                                (state.free_switch_state
+                                    if state.free_switch_state or weap.deploy_group != state.deploy_group
+                                    else self.free_switch_timer)
                                     + self.free_switch_delay,
                                 self.free_switch_timer - self.free_switch_delay,
                                 ShotAction.FREE_SWITCH
@@ -101,7 +104,11 @@ class Solver(NamedTuple):
                             ),
                         ):
                             r, count, chains = self._solve(SolverState(next_s, weap.deploy_group, next_fs))
-                            yield SolverSolution(r + delay, count, tuple((Shot(action, i, delay, next_fs),) + x for x in chains))
+                            yield SolverSolution(
+                                r + delay,
+                                count,
+                                tuple((Shot(action, i, delay, next_fs),) + x for x in chains)
+                            )
             self.memo[state] = reduce(Solver._merge_solution_min, next_state_generator())
 
         return self.memo[state]
@@ -110,11 +117,16 @@ class Solver(NamedTuple):
         if not any(shots):
             return SolverSolution()
 
+        # TODO refactor (looks very similar to _solve.next_state_generator)
         def next_state_generator():
             for i, weap in enumerate(self.weapons):
                 if shots[i]:
                     r, count, chains = self._solve(SolverState(Solver.remove_one_shot(shots, i), weap.deploy_group, initial_fs))
-                    yield SolverSolution(r, count, tuple((Shot(initial_action, i, initial_delay, initial_fs),) + x for x in chains))
+                    yield SolverSolution(
+                        r,
+                        count,
+                        tuple((Shot(initial_action, i, initial_delay, initial_fs),) + x for x in chains)
+                    )
 
         return reduce(Solver._merge_solution_min, next_state_generator())
 
@@ -156,7 +168,7 @@ class InstructionFormatter(Formatter):
                     if shot.delay != self.solver.free_switch_delay and shot.action == ShotAction.FREE_SWITCH:
                         yield 'c'
                         yield str(t - self.solver.free_switch_delay) + ':'
-                    yield (chr(ord('A') + shot.weap_index))
+                    yield chr(ord('A') + shot.weap_index)
                 else:
                     if last_weap == shot.weap_index:
                         yield 'd'
@@ -170,10 +182,14 @@ class InstructionFormatter(Formatter):
         return ' '.join(generate_tokens())
 
 def main():
-    solver = Solver.new(weapons=(
-        Weapon('M870', 900, 1, 5),
-        Weapon('MP220', 300, -2, 2),
-    ))
+    solver = Solver.new(
+        weapons=(
+            Weapon('MP', 300, 1, 2),
+            Weapon('M8', 900, -2, 5),
+        ),
+        require_shot_at_zero=False,
+        initial_time_offset=-299,
+    )
 
     formatters = (TimingFormatter(solver), InstructionFormatter(solver))
 
