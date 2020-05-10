@@ -18,6 +18,8 @@ At any time, there are only two decisions:
 - which gun to shoot
 - whether to `wait out full switch delay` or `wait for next free switch`
 
+The state is `ammo count 1`, `ammo count 2`, `current deploy group`, and `free switch timer`.
+
 ### Minimize `maximum time between adjacent shots`
 This feature is not yet implemented.
 
