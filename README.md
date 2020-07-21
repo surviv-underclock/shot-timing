@@ -7,8 +7,12 @@ The program takes the following inputs and outputs the optimal objective value a
 - require shot at time zero: `yes`/`no`
 - switch delay 1, switch delay 2
 - mag size 1, mag size 2
-- maximum slow penalty duration (0 for desync/overclock, infinity for maxfiring)
+- maximum slow penalty duration (0 for noslow, infinity for maxfiring)
 - fire delay 1, fire delay 2 (not needed if maximum slow penalty duration is 0)
+
+`time from first to last shot` resembles desync with `require shot at time zero` and underclock ("hard overclock") without.
+
+`maximum time between adjacent shots` resembles what is described as "soft overclock" in the outdated terminology.
 
 ## Algorithms
 ### Minimize `time from first to last shot`
